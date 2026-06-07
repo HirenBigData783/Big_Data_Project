@@ -1,0 +1,60 @@
+
+TfL DATA MODEL - DATA DICTIONARY
+=================================
+
+TABLE: dim_networks
+-------------------
+network_id      : INT (PK) - Unique network identifier
+network_name    : VARCHAR - Name of the network (e.g., London Underground)
+network_type    : VARCHAR - Type classification (Underground, Rail)
+
+TABLE: dim_lines
+----------------
+line_id         : INT (PK) - Unique line identifier
+line_name       : VARCHAR - Name of the line (e.g., Piccadilly, Central)
+line_color      : VARCHAR - Official TfL line color hex code
+is_night_service: BOOLEAN - Whether line offers night service
+
+TABLE: dim_stations
+-------------------
+station_id              : INT (PK) - Unique station identifier
+nlc_code                : VARCHAR - National Location Code
+station_name            : VARCHAR - Station name
+network_id              : INT (FK) - References dim_networks.network_id
+has_london_underground  : BOOLEAN - Has Underground service
+has_elizabeth_line      : BOOLEAN - Has Elizabeth line service
+has_overground          : BOOLEAN - Has Overground service
+has_dlr                 : BOOLEAN - Has DLR service
+has_night_tube          : BOOLEAN - Has Night Tube service
+is_active               : BOOLEAN - Station currently active
+
+TABLE: fact_station_lines (Bridge Table)
+-----------------------------------------
+station_line_id : INT (PK) - Unique relationship identifier
+station_id      : INT (FK) - References dim_stations.station_id
+line_id         : INT (FK) - References dim_lines.line_id
+is_interchange  : BOOLEAN - Station serves multiple lines
+effective_from  : DATE - Relationship start date
+effective_to    : DATE - Relationship end date (NULL if current)
+
+TABLE: dim_date
+---------------
+date_id         : INT (PK) - Unique date identifier
+year            : INT - Year (2007-2021)
+quarter         : INT - Quarter (NULL for annual records)
+month           : INT - Month (NULL for annual records)
+is_annual       : BOOLEAN - Whether this is annual aggregate
+period_label    : VARCHAR - Human-readable period description
+period_start    : DATE - Period start date
+period_end      : DATE - Period end date
+
+TABLE: fact_passenger_entry_exit (Fact Table)
+----------------------------------------------
+entry_exit_id       : BIGINT (PK) - Unique transaction identifier
+station_id          : INT (FK) - References dim_stations.station_id
+date_id             : INT (FK) - References dim_date.date_id
+total_entry_exit    : BIGINT - Total passenger movements
+estimated_entries   : BIGINT - Estimated entries (50% of total)
+estimated_exits     : BIGINT - Estimated exits (50% of total)
+record_type         : VARCHAR - Type of record (Annual, Monthly, etc.)
+data_source         : VARCHAR - Source of data

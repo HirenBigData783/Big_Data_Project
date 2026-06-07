@@ -1,0 +1,15 @@
+line_id,line_name,line_color,is_night_service
+1,Bakerloo,#B36305,False
+2,Central,#E32017,False
+3,Circle,#FFD300,False
+4,DLR,#00A4A7,False
+5,District,#00782A,False
+6,Hammersmith & City,#F3A9BB,False
+7,Jubilee,#A0A5A9,False
+8,London Overground,#EE7C0E,False
+9,Metropolitan,#9B0056,False
+10,Northern,#000000,False
+11,Piccadilly,#003688,False
+12,TfL Rail,#Gray,False
+13,Victoria,#0098D4,False
+14,Waterloo & City,#95CDBA,False

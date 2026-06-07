@@ -1,0 +1,192 @@
+pipeline {
+agent any
+
+```
+environment {
+    REMOTE_HOST = "13.41.167.97"
+    REMOTE_USER = "consultant"
+    REMOTE_PASSWORD = "WelcomeItc@2026"
+    REMOTE_DIR = "/home/consultant/aparna/TFL_Project"
+    HDFS_TARGET = "/tmp/aparna/tfl_proj/tfl_data"
+}
+
+options {
+    timestamps()
+}
+
+stages {
+
+    stage('Verify Scripts') {
+        steps {
+            sh '''
+            echo "Verifying scripts in workspace..."
+
+            ls -lh $WORKSPACE/scripts/*.sh
+            ls -lh $WORKSPACE/scripts/*.hql
+            ls -lh $WORKSPACE/scripts/*.py
+
+            echo "Scripts verified"
+            '''
+        }
+    }
+
+    stage('Create Remote Directories') {
+        steps {
+            sh '''
+            sshpass -p "$REMOTE_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $REMOTE_USER@$REMOTE_HOST \
+            "mkdir -p $REMOTE_DIR/scripts"
+            '''
+        }
+    }
+
+    stage('Copy Scripts To Cloudera') {
+        steps {
+            sh '''
+            echo "Copying shell scripts..."
+            sshpass -p "$REMOTE_PASSWORD" scp \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $WORKSPACE/scripts/*.sh \
+            $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/scripts/
+
+            echo "Copying Hive scripts..."
+            sshpass -p "$REMOTE_PASSWORD" scp \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $WORKSPACE/scripts/*.hql \
+            $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/scripts/
+
+            echo "Copying PySpark scripts..."
+            sshpass -p "$REMOTE_PASSWORD" scp \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $WORKSPACE/scripts/*.py \
+            $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/scripts/
+            '''
+        }
+    }
+
+    stage('Set Permissions') {
+        steps {
+            sh '''
+            sshpass -p "$REMOTE_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $REMOTE_USER@$REMOTE_HOST \
+            "chmod +x $REMOTE_DIR/scripts/*.sh"
+            '''
+        }
+    }
+
+    stage('Verify Remote Files') {
+        steps {
+            sh '''
+            sshpass -p "$REMOTE_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $REMOTE_USER@$REMOTE_HOST \
+            "ls -lh $REMOTE_DIR/scripts/"
+            '''
+        }
+    }
+
+    stage('Clean HDFS') {
+        steps {
+            sh '''
+            sshpass -p "$REMOTE_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $REMOTE_USER@$REMOTE_HOST \
+            "hdfs dfs -rm -r -f -skipTrash $HDFS_TARGET || true"
+            '''
+        }
+    }
+
+    stage('Sqoop Import') {
+        steps {
+            sh '''
+            sshpass -p "$REMOTE_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $REMOTE_USER@$REMOTE_HOST \
+            "cd $REMOTE_DIR && bash scripts/sqoop_imports.sh"
+            '''
+        }
+    }
+
+    stage('Create Hive External Tables') {
+        steps {
+            sh '''
+            sshpass -p "$REMOTE_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $REMOTE_USER@$REMOTE_HOST \
+            "cd $REMOTE_DIR && hive -f scripts/tfl_external_tables.hql"
+            '''
+        }
+    }
+
+    stage('Verify HDFS Data') {
+        steps {
+            sh '''
+            sshpass -p "$REMOTE_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $REMOTE_USER@$REMOTE_HOST \
+            "hdfs dfs -ls $HDFS_TARGET"
+            '''
+        }
+    }
+
+    stage('Run Curated PySpark Layer') {
+        steps {
+            sh '''
+            sshpass -p "$REMOTE_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $REMOTE_USER@$REMOTE_HOST \
+            "spark-submit --master local[*] $REMOTE_DIR/scripts/tfl_curated_layer.py"
+            '''
+        }
+    }
+
+    stage('Create Curated Hive Tables') {
+        steps {
+            sh '''
+            sshpass -p "$REMOTE_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            $REMOTE_USER@$REMOTE_HOST \
+            "beeline -u 'jdbc:hive2://ip-172-31-12-74.eu-west-2.compute.internal:10000/default' \
+            -f $REMOTE_DIR/scripts/tfl_curated_tables.hql"
+            '''
+        }
+    }
+}
+
+post {
+
+    success {
+        echo '======================================'
+        echo 'PIPELINE COMPLETED SUCCESSFULLY'
+        echo '======================================'
+        echo "HDFS Path: ${HDFS_TARGET}"
+    }
+
+    failure {
+        echo '======================================'
+        echo 'PIPELINE FAILED'
+        echo 'Check failed stage above'
+        echo '======================================'
+    }
+
+    always {
+        cleanWs()
+    }
+}
+```
+
+}

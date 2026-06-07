@@ -1,0 +1,174 @@
+#!/bin/bash
+set -e
+
+# Configuration
+REMOTE_HOST="13.41.167.97"
+REMOTE_USER="consultant"
+REMOTE_PASSWORD="WelcomeItc@2026"
+REMOTE_DIR="/home/consultant/aparna/TFL_Project"
+HDFS_TARGET="/tmp/aparna/tfl_proj/tfl_data"
+
+echo "========================================"
+echo "TfL Pipeline - GitHub to Cloudera"
+echo "========================================"
+echo "Workspace: $WORKSPACE"
+echo "Remote: $REMOTE_HOST:$REMOTE_DIR"
+echo "========================================"
+echo ""
+
+# Step 1: Verify scripts for raw layer from GitHub
+echo "Step 1: Verify scripts in workspace..."
+if [ ! -d "$WORKSPACE/src/raw_layer" ]; then
+    echo "ERROR: Sqoop scripts not found!"
+    exit 1
+fi
+ls -lh $WORKSPACE/src/raw_layer/*.sh
+ls -lh $WORKSPACE/src/raw_layer/*.hql
+echo "Scripts found"
+echo ""
+
+# Step 2: Verify scripts for curated layer from GitHub
+echo "Step 1: Verify scripts in workspace..."
+if [ ! -d "$WORKSPACE/src/curated_layer" ]; then
+    echo "ERROR: Sqoop scripts not found!"
+    exit 1
+fi
+ls -lh $WORKSPACE/src/curated_layer/spark/*.py
+ls -lh $WORKSPACE/src/curated_layer/scripts/*.hql
+echo "Scripts found"
+echo ""
+
+# Step 3: Create remote directories for raw layer(suppress banner output)
+echo "Step 3: Create directories for raw layer on Cloudera..."
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_DIR/src/raw_layer $REMOTE_DIR/src/raw_layer" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Directories created"
+echo ""
+
+# Step 4: Create remote directories for scripts for curated layer(suppress banner output)
+echo "Step 4: Create directories for scripts for curated layer on Cloudera..."
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_DIR/src/curated_layer/scripts $REMOTE_DIR/src/curated_layer/scripts" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Directories created"
+echo ""
+
+# Step 5: Create remote directories for spark for curated layer(suppress banner output)
+echo "Step 5: Create directories for spark for curated layer on Cloudera..."
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_DIR/src/curated_layer/spark $REMOTE_DIR/src/curated_layer/spark" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Directories created"
+echo ""
+
+# Step 6: Copy Sqoop scripts (suppress ALL output including banner)
+echo "Step 6: Copy Sqoop scripts to Cloudera..."
+sshpass -p "$REMOTE_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $WORKSPACE/src/raw_layer/*.sh $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/src/raw_layer/ 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Sqoop scripts copied"
+echo ""
+sshpass -p "$REMOTE_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $WORKSPACE/src/curated_layer/spark/*.sh $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/src/curated_layer/spark/ 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Spark scripts copied"
+echo ""
+
+# Step 7: Copy Hive scripts (suppress ALL output including banner)
+echo "Step 7: Copy Hive scripts to Cloudera..."
+sshpass -p "$REMOTE_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $WORKSPACE/src/raw_layer/*.hql $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/src/raw_layer/ 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Hive scripts for raw layer copied"
+echo ""
+sshpass -p "$REMOTE_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $WORKSPACE/src/curated_layer/scripts/*.hql $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/src/curated_layer/scripts/ 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Hive scripts for curated layer copied"
+echo ""
+
+# Step 8: Set permissions
+echo "Step 8: Set execute permissions..."
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "chmod +x $REMOTE_DIR/src/raw_layer/*.sh $REMOTE_DIR/src/raw_layer/*.sh 2>/dev/null" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Permissions set for raw layer"
+echo ""
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "chmod +x $REMOTE_DIR/src/curated_layer/scripts/*.sh $REMOTE_DIR/src/curated_layer/scripts/*.sh 2>/dev/null" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Permissions set for scripts in curated layer"
+echo ""
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "chmod +x $REMOTE_DIR/src/curated_layer/spark/*.sh $REMOTE_DIR/src/curated_layer/spark/*.sh 2>/dev/null" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Permissions set for spark in curated layer"
+echo ""
+
+# Step 9: Verify on remote
+echo "Step 9: Verify files on Cloudera..."
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "ls -lh $REMOTE_DIR/src/raw_layer/ && ls -lh $REMOTE_DIR/src/raw_layer/" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "Files verified"
+echo ""
+
+# Step 10: Clean HDFS
+echo "======================================"
+echo "Step 10: Clean HDFS..."
+echo "======================================"
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "hdfs dfs -rm -r -f -skipTrash $HDFS_TARGET" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+echo "HDFS cleaned"
+echo ""
+
+# Step 8: Run Sqoop
+echo "======================================"
+echo "Step 8: Run Sqoop Import (6 tables)..."
+echo "======================================"
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_DIR && bash src/raw_layer/raw_full_load.sh" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â"
+echo "Sqoop completed"
+echo ""
+
+# Step 10: Create Hive tables
+echo "======================================"
+echo "Step 10: Create Hive Tables..."
+echo "======================================"
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_DIR && hive -f src/raw_layer/create_raw_hive_table.hql" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â"
+echo "Tables created"
+echo ""
+
+# Step 11: Verify HDFS
+echo "======================================"
+echo "VERIFICATION"
+echo "======================================"
+echo ""
+echo "HDFS Contents:"
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    $REMOTE_USER@$REMOTE_HOST "hdfs dfs -ls $HDFS_TARGET" 2>&1 | grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "â"
+
+# Step 12: Copy PySpark script
+#echo "Step 4: Copy Hive scripts to Cloudera..."
+#sshpass -p "$REMOTE_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+#    $WORKSPACE/scripts/*.py $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/scripts/ 2>&1 | grep -v "ITC Big Data Lab" | grep -v #"Commands:" | grep -v "HDFS home:" | grep -v "â" || true
+#echo "PySpark scripts copied"
+#echo ""
+
+echo "======================================"
+echo "Step 13:Running TFL PySpark Curated Job"
+echo "======================================"
+sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+	$REMOTE_USER@$REMOTE_HOST "spark-submit --master local[*] $REMOTE_DIR/src/curated_layer/spark/full_load.py"
+echo "✓ PySpark Curated Layer Completed"
+
+echo "======================================"
+echo "Step 14:Running TFL Hive Curated Tables Job"
+echo "======================================"
+sshpass -p "${REMOTE_PASSWORD}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+	${REMOTE_USER}@${REMOTE_HOST} \
+    "beeline -u 'jdbc:hive2://ip-172-31-12-74.eu-west-2.compute.internal:10000/default' -f $REMOTE_DIR/src/curated_layer/scripts/curated_full_load.hql" 2>&1 | \
+    grep -v "ITC Big Data Lab" | grep -v "Commands:" | grep -v "HDFS home:" | grep -v "━" || true
+echo "Curated Tables created"
+echo ""
+echo "✓ Hive Curated Layer Completed"
+
+echo ""
+echo "======================================"
+echo "PIPELINE COMPLETE"
+echo "======================================"
+echo "GitHub: AparnaAmonkar22/TFL_PROJECT"
+echo "HDFS: $HDFS_TARGET"
+echo "Hive: tfl_db (6 tables, 5,812 records)"
+echo "======================================"
