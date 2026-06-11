@@ -15,7 +15,7 @@ spark.sparkContext.setLogLevel("WARN")
 
 
 HDFS_BASE = "/tmp/tfl_project_hadoop"
-OUTPUT_BASE = "/tmp/tfl_project_hadoop_jen/gold"
+OUTPUT_BASE = "/tmp/tfl_project_hadoop/gold"
 HIVE_DB = "tfl_db"
 
 CHECK_COLUMN = "entry_exit_id"
