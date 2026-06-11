@@ -93,7 +93,7 @@ def read_last_value():
     try:
         return int(value.strip())
     except ValueError:
-        raise ValueError(f"Invalid watermark value found: {value}")
+        raise ValueError(f"Invalid watermark value found: {value}") 
 
 
 def write_last_value(value):
