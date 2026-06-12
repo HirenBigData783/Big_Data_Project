@@ -70,8 +70,8 @@ pipeline {
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'cloudera-ssh-creds',
-                        usernameVariable: 'SSH_USER',
-                        passwordVariable: 'SSH_PASS'
+                        usernameVariable: 'Consultants',
+                        passwordVariable: 'WelcomeItc@2026'
                     )
                 ]) {
                     sh '''
