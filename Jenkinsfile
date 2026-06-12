@@ -67,26 +67,40 @@ pipeline {
 
         stage('Prepare Remote Directory') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'cloudera-ssh-creds',
-                        usernameVariable: 'Consultants',
-                        passwordVariable: 'WelcomeItc@2026'
-                    )
-                ]) {
-                    sh '''
-                        set +x
-                        export SSHPASS="$SSH_PASS"
+                echo '========================================='
+                echo 'Stage 2: Create Directories on Cloudera'
+                echo '========================================='
+                sh '''
+                    sshpass -p "Welcome@2026" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                        ${REMOTE_USER}@${REMOTE_HOST} \
+                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load
+    //                  mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load
+    //                  echo REMOTE_DIR_READY
 
-                        sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
-                            mkdir -p $PROJECT_DIR
-                            mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load
-                            mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load
-                            echo REMOTE_DIR_READY
-                        "
-                    '''
-                }
+                    echo "Directories created"
+                '''
             }
+            // steps {
+            //     withCredentials([
+            //         usernamePassword(
+            //             credentialsId: 'cloudera-ssh-creds',
+            //             usernameVariable: 'SSH_USER',
+            //             passwordVariable: 'SSH_PASS'
+            //         )
+            //     ]) {
+            //         sh '''
+            //             set +x
+            //             export SSHPASS="$SSH_PASS"
+
+            //             sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
+            //                 mkdir -p $PROJECT_DIR
+            //                 mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load
+            //                 mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load
+            //                 echo REMOTE_DIR_READY
+            //             "
+            //         '''
+            //     }
+            // }
         }
 
         stage('Copy Scripts to Remote') {
