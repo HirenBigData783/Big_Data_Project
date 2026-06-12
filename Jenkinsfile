@@ -207,55 +207,62 @@ pipeline {
             }
         }
 
-        steps {
-                script {
-                    def tables = env.TABLE_LIST.split(',')
+stage('Run Sqoop Load on Remote') {
+    when {
+        expression {
+            return params.LOAD_TOOL == 'SQOOP'
+        }
+    }
 
-                    for (table in tables) {
-                        table = table.trim()
+    steps {
+        script {
+            def tables = env.TABLE_LIST.split(',')
 
-                        def targetSuffix = ''
-                        if (params.LOAD_TYPE == 'FULL') {
-                            targetSuffix = '_full_load'
-                        } else {
-                            targetSuffix = '_inc_load'
-                        }
+            for (table in tables) {
+                table = table.trim()
 
-                        def hdfsTargetPath = "${env.HDFS_RAW_BASE}/${table}${targetSuffix}"
+                def targetSuffix = ''
+                if (params.LOAD_TYPE == 'FULL') {
+                    targetSuffix = '_full_load'
+                } else {
+                    targetSuffix = '_inc_load'
+                }
 
-                        echo "=================================================="
-                        echo "Running Sqoop ${params.LOAD_TYPE} load on remote"
-                        echo "Table           : ${table}"
-                        echo "HDFS target path: ${hdfsTargetPath}"
-                        echo "=================================================="
+                def hdfsTargetPath = "${env.HDFS_RAW_BASE}/${table}${targetSuffix}"
 
-                        if (params.LOAD_TYPE == 'FULL') {
-                            sh """
-                                set +x
+                echo "=================================================="
+                echo "Running Sqoop ${params.LOAD_TYPE} load on remote"
+                echo "Table           : ${table}"
+                echo "HDFS target path: ${hdfsTargetPath}"
+                echo "=================================================="
 
-                                sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
-                                    cd \${PROJECT_DIR}
-                                    chmod +x \${SQOOP_FULL_SCRIPT}
-                                    \${SQOOP_FULL_SCRIPT} ${table} ${hdfsTargetPath}
-                                "
-                            """
-                        }
+                if (params.LOAD_TYPE == 'FULL') {
+                    sh """
+                        set +x
 
-                        if (params.LOAD_TYPE == 'INCREMENTAL') {
-                            sh """
-                                set +x
+                        sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
+                            cd \${PROJECT_DIR}
+                            chmod +x \${SQOOP_FULL_SCRIPT}
+                            \${SQOOP_FULL_SCRIPT} ${table} ${hdfsTargetPath}
+                        "
+                    """
+                }
 
-                                sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
-                                    cd \${PROJECT_DIR}
-                                    chmod +x \${SQOOP_INCREMENTAL_SCRIPT}
-                                    \${SQOOP_INCREMENTAL_SCRIPT} ${table} ${hdfsTargetPath}
-                                "
-                            """
-                        }
-                    }
+                if (params.LOAD_TYPE == 'INCREMENTAL') {
+                    sh """
+                        set +x
+
+                        sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
+                            cd \${PROJECT_DIR}
+                            chmod +x \${SQOOP_INCREMENTAL_SCRIPT}
+                            \${SQOOP_INCREMENTAL_SCRIPT} ${table} ${hdfsTargetPath}
+                        "
+                    """
                 }
             }
         }
+    }
+}
         stage('Run Spark Full Flow on Remote') {
             when {
                 expression {
