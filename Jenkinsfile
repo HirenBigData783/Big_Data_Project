@@ -66,13 +66,17 @@ pipeline {
             }
         }
         stage('Test SSH Login') {
-            steps {
+                    steps {
                 echo '========================================='
                 echo 'Testing SSH Login to Cloudera'
                 echo '========================================='
 
                 sh '''
                     set +x
+
+                    echo "Remote user: ${REMOTE_USER}"
+                    echo "Remote host: ${REMOTE_HOST}"
+                    echo "Password length: ${#REMOTE_PASSWORD}"
 
                     sshpass -p "${REMOTE_PASSWORD}" ssh \
                         -o StrictHostKeyChecking=no \
