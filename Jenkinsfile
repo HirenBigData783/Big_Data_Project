@@ -65,7 +65,21 @@ pipeline {
                 }
             }
         }
+        stage('Test SSH Login') {
+            steps {
+                sh '''
+                    set +x
+                    export SSHPASS="$REMOTE_PASSWORD"
 
+                    sshpass -e ssh \
+                    -o StrictHostKeyChecking=no \
+                    -o UserKnownHostsFile=/dev/null \
+                    -o PreferredAuthentications=password \
+                    -o PubkeyAuthentication=no \
+                    "$REMOTE_USER@$REMOTE_HOST" "whoami && hostname"
+                '''
+            }
+}
         stage('Prepare Remote Directory') {
             steps {
                 echo '========================================='
