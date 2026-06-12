@@ -207,14 +207,7 @@ pipeline {
             }
         }
 
-        stage('Run Sqoop Load on Remote') {
-            when {
-                expression {
-                    return params.LOAD_TOOL == 'SQOOP'
-                }
-            }
-
-            steps {
+        steps {
                 script {
                     def tables = env.TABLE_LIST.split(',')
 
@@ -236,44 +229,33 @@ pipeline {
                         echo "HDFS target path: ${hdfsTargetPath}"
                         echo "=================================================="
 
-                        withCredentials([
-                            usernamePassword(
-                                credentialsId: 'cloudera-ssh-creds',
-                                usernameVariable: 'SSH_USER',
-                                passwordVariable: 'SSH_PASS'
-                            )
-                        ]) {
-                            if (params.LOAD_TYPE == 'FULL') {
-                                sh """
-                                    set +x
-                                    export SSHPASS="\$SSH_PASS"
+                        if (params.LOAD_TYPE == 'FULL') {
+                            sh """
+                                set +x
 
-                                    sshpass -e ssh ${SSH_OPTS} "\$SSH_USER@${REMOTE_HOST}" "
-                                        cd ${PROJECT_DIR}
-                                        chmod +x ${SQOOP_FULL_SCRIPT}
-                                        ${SQOOP_FULL_SCRIPT} ${table} ${hdfsTargetPath}
-                                    "
-                                """
-                            }
+                                sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
+                                    cd \${PROJECT_DIR}
+                                    chmod +x \${SQOOP_FULL_SCRIPT}
+                                    \${SQOOP_FULL_SCRIPT} ${table} ${hdfsTargetPath}
+                                "
+                            """
+                        }
 
-                            if (params.LOAD_TYPE == 'INCREMENTAL') {
-                                sh """
-                                    set +x
-                                    export SSHPASS="\$SSH_PASS"
+                        if (params.LOAD_TYPE == 'INCREMENTAL') {
+                            sh """
+                                set +x
 
-                                    sshpass -e ssh ${SSH_OPTS} "\$SSH_USER@${REMOTE_HOST}" "
-                                        cd ${PROJECT_DIR}
-                                        chmod +x ${SQOOP_INCREMENTAL_SCRIPT}
-                                        ${SQOOP_INCREMENTAL_SCRIPT} ${table} ${hdfsTargetPath}
-                                    "
-                                """
-                            }
+                                sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
+                                    cd \${PROJECT_DIR}
+                                    chmod +x \${SQOOP_INCREMENTAL_SCRIPT}
+                                    \${SQOOP_INCREMENTAL_SCRIPT} ${table} ${hdfsTargetPath}
+                                "
+                            """
                         }
                     }
                 }
             }
         }
-
         stage('Run Spark Full Flow on Remote') {
             when {
                 expression {
