@@ -67,51 +67,41 @@ pipeline {
         }
         stage('Test SSH Login') {
             steps {
+                echo '========================================='
+                echo 'Testing SSH Login to Cloudera'
+                echo '========================================='
+
                 sh '''
                     set +x
-                    export SSHPASS="$REMOTE_PASSWORD"
 
-                    sshpass -e ssh \
-                    -o StrictHostKeyChecking=no \
-                    -o UserKnownHostsFile=/dev/null \
-                    -o PreferredAuthentications=password \
-                    -o PubkeyAuthentication=no \
-                    "$REMOTE_USER@$REMOTE_HOST" "whoami && hostname"
+                    sshpass -p "${REMOTE_PASSWORD}" ssh \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        ${REMOTE_USER}@${REMOTE_HOST} \
+                        "echo CONNECTED_TO_REMOTE && whoami && hostname"
                 '''
             }
-}
+        }
         stage('Prepare Remote Directory') {
             steps {
-                echo '========================================='
-                echo 'Stage 2: Create Directories on Cloudera'
-                echo '========================================='
+        echo '========================================='
+        echo 'Stage 2: Create Directories on Cloudera'
+        echo '========================================='
 
-                sh '''
-                    set +x
-                    export SSHPASS="$REMOTE_PASSWORD"
+        sh '''
+            set +x
 
-                    echo "Testing SSH connection first..."
-
-                    sshpass -e ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "
-                        echo CONNECTED_TO_REMOTE
-                        whoami
-                        hostname
-                    "
-
-                    echo "Creating project directories on remote host..."
-
-                    sshpass -e ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "
-                        mkdir -p $PROJECT_DIR
-                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load
-                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark
-                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load
-                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark
-                        echo REMOTE_DIR_READY
-                    "
-
-                    echo "Returned back to Jenkins after remote directory creation"
-                '''
-            }
+            sshpass -p "${REMOTE_PASSWORD}" ssh \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                ${REMOTE_USER}@${REMOTE_HOST} \
+                "mkdir -p ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/full_load \
+                          ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark \
+                          ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load \
+                          ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark \
+                 && echo REMOTE_DIR_READY"
+        '''
+        }
 }
 
         stage('Copy Scripts to Remote') {
