@@ -28,21 +28,22 @@ pipeline {
     }
 
     environment {
-        REMOTE_HOST = '13.41.167.97'
-        REMOTE_USER = 'consultant'
+    REMOTE_HOST = '13.41.167.97'
+    REMOTE_USER = 'consultant'
+    REMOTE_PASSWORD = 'WelcomeItc@2026'
 
-        PROJECT_DIR = '/home/consultant/hiren/TFL_Project_1'
-        HDFS_RAW_BASE = '/tmp/tfl_project_hadoop'
-        HDFS_GOLD_BASE = '/tmp/tfl_project_hadoop/gold'
+    PROJECT_DIR = '/home/consultant/hiren/TFL_Project_1'
+    HDFS_RAW_BASE = '/tmp/tfl_project_hadoop'
+    HDFS_GOLD_BASE = '/tmp/tfl_project_hadoop/gold'
 
-        SSH_OPTS = '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    SSH_OPTS = '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
-        SQOOP_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/raw_sqoop_full_load.sh'
-        SQOOP_INCREMENTAL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/raw_incremental_load.sh'
+    SQOOP_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/raw_sqoop_full_load.sh'
+    SQOOP_INCREMENTAL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/raw_incremental_load.sh'
 
-        SPARK_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark/tfl_spark_analysis.py'
-        SPARK_INCREMENTAL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark/incremental.py'
-    }
+    SPARK_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark/tfl_spark_analysis.py'
+    SPARK_INCREMENTAL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark/incremental.py'
+}
 
     stages {
 
@@ -70,38 +71,34 @@ pipeline {
                 echo '========================================='
                 echo 'Stage 2: Create Directories on Cloudera'
                 echo '========================================='
-                sh '''
-                    sshpass -p "Welcome@2026" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                        ${REMOTE_USER}@${REMOTE_HOST} \
-                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load
-    //                  mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load
-    //                  echo REMOTE_DIR_READY
 
-                    echo "Directories created"
+                sh '''
+                    set +x
+                    export SSHPASS="$REMOTE_PASSWORD"
+
+                    echo "Testing SSH connection first..."
+
+                    sshpass -e ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "
+                        echo CONNECTED_TO_REMOTE
+                        whoami
+                        hostname
+                    "
+
+                    echo "Creating project directories on remote host..."
+
+                    sshpass -e ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "
+                        mkdir -p $PROJECT_DIR
+                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load
+                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark
+                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load
+                        mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark
+                        echo REMOTE_DIR_READY
+                    "
+
+                    echo "Returned back to Jenkins after remote directory creation"
                 '''
             }
-            // steps {
-            //     withCredentials([
-            //         usernamePassword(
-            //             credentialsId: 'cloudera-ssh-creds',
-            //             usernameVariable: 'SSH_USER',
-            //             passwordVariable: 'SSH_PASS'
-            //         )
-            //     ]) {
-            //         sh '''
-            //             set +x
-            //             export SSHPASS="$SSH_PASS"
-
-            //             sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
-            //                 mkdir -p $PROJECT_DIR
-            //                 mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load
-            //                 mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load
-            //                 echo REMOTE_DIR_READY
-            //             "
-            //         '''
-            //     }
-            // }
-        }
+}
 
         stage('Copy Scripts to Remote') {
             steps {
