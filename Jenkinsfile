@@ -110,24 +110,32 @@ pipeline {
 
         stage('Copy Scripts to Remote') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'cloudera-ssh-creds',
-                        usernameVariable: 'SSH_USER',
-                        passwordVariable: 'SSH_PASS'
-                    )
-                ]) {
+                    echo '========================================='
+                    echo 'Stage 3: Copy Scripts to Cloudera'
+                    echo '========================================='
+
                     sh '''
                         set +x
-                        export SSHPASS="$SSH_PASS"
 
-                        sshpass -e scp $SSH_OPTS -r ON_PREM "$SSH_USER@$REMOTE_HOST:$PROJECT_DIR/"
-                        sshpass -e scp $SSH_OPTS Jenkinsfile "$SSH_USER@$REMOTE_HOST:$PROJECT_DIR/" || true
+                        echo "Copying ON_PREM folder to remote host..."
+
+                        sshpass -p "${REMOTE_PASSWORD}" scp \
+                            -o StrictHostKeyChecking=no \
+                            -o UserKnownHostsFile=/dev/null \
+                            -r ON_PREM \
+                            ${REMOTE_USER}@${REMOTE_HOST}:${PROJECT_DIR}/
+
+                        echo "Copying Jenkinsfile to remote host..."
+
+                        sshpass -p "${REMOTE_PASSWORD}" scp \
+                            -o StrictHostKeyChecking=no \
+                            -o UserKnownHostsFile=/dev/null \
+                            Jenkinsfile \
+                            ${REMOTE_USER}@${REMOTE_HOST}:${PROJECT_DIR}/ || true
 
                         echo "Scripts copied to remote host"
                     '''
-                }
-            }
+        }
         }
 
         stage('Check Remote Tools') {
