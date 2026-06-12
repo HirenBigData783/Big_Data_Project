@@ -140,20 +140,21 @@ pipeline {
 
         stage('Check Remote Tools') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'cloudera-ssh-creds',
-                        usernameVariable: 'SSH_USER',
-                        passwordVariable: 'SSH_PASS'
-                    )
-                ]) {
-                    sh '''
-                        set +x
-                        export SSHPASS="$SSH_PASS"
+                echo '========================================='
+                echo 'Stage 4: Check Remote Tools'
+                echo '========================================='
 
-                        sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
-                            echo USER_ON_REMOTE=\\$(whoami)
-                            echo PATH=\\$PATH
+                sh '''
+                    set +x
+
+                    sshpass -p "${REMOTE_PASSWORD}" ssh \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        ${REMOTE_USER}@${REMOTE_HOST} \
+                        "
+                            echo USER_ON_REMOTE=$(whoami)
+                            echo HOSTNAME=$(hostname)
+                            echo PATH=$PATH
 
                             echo Checking Hadoop...
                             which hdfs || true
@@ -167,11 +168,9 @@ pipeline {
                             which spark-submit || true
                             spark-submit --version || true
                         "
-                    '''
-                }
+                '''
             }
-        }
-
+}
         stage('Select Sqoop Tables') {
             when {
                 expression {
