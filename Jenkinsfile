@@ -23,13 +23,19 @@ pipeline {
         string(
             name: 'TABLE_NAME',
             defaultValue: '',
-            description: 'Required only when LOAD_SCOPE = SINGLE_TABLE. Example: dim_networks'
+            description: 'Required only when LOAD_SCOPE = SINGLE_TABLE. Example: dim_date'
         )
     }
 
     environment {
-        HDFS_RAW_BASE  = '/tmp/tfl_project_hadoop'
+        REMOTE_HOST = '13.41.167.97'
+        REMOTE_USER = 'consultant'
+
+        PROJECT_DIR = '/home/consultant/hiren/TFL_Project_1'
+        HDFS_RAW_BASE = '/tmp/tfl_project_hadoop'
         HDFS_GOLD_BASE = '/tmp/tfl_project_hadoop/gold'
+
+        SSH_OPTS = '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
         SQOOP_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/raw_sqoop_full_load.sh'
         SQOOP_INCREMENTAL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/raw_incremental_load.sh'
@@ -39,12 +45,6 @@ pipeline {
     }
 
     stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
         stage('Validate Parameters') {
             steps {
@@ -57,8 +57,90 @@ pipeline {
                     echo "LOAD_TYPE      = ${params.LOAD_TYPE}"
                     echo "LOAD_SCOPE     = ${params.LOAD_SCOPE}"
                     echo "TABLE_NAME     = ${params.TABLE_NAME}"
+                    echo "REMOTE_HOST    = ${env.REMOTE_HOST}"
+                    echo "PROJECT_DIR    = ${env.PROJECT_DIR}"
                     echo "HDFS_RAW_BASE  = ${env.HDFS_RAW_BASE}"
                     echo "HDFS_GOLD_BASE = ${env.HDFS_GOLD_BASE}"
+                }
+            }
+        }
+
+        stage('Prepare Remote Directory') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'cloudera-ssh-creds',
+                        usernameVariable: 'SSH_USER',
+                        passwordVariable: 'SSH_PASS'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        export SSHPASS="$SSH_PASS"
+
+                        sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
+                            mkdir -p $PROJECT_DIR
+                            mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/full_load
+                            mkdir -p $PROJECT_DIR/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load
+                            echo REMOTE_DIR_READY
+                        "
+                    '''
+                }
+            }
+        }
+
+        stage('Copy Scripts to Remote') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'cloudera-ssh-creds',
+                        usernameVariable: 'SSH_USER',
+                        passwordVariable: 'SSH_PASS'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        export SSHPASS="$SSH_PASS"
+
+                        sshpass -e scp $SSH_OPTS -r ON_PREM "$SSH_USER@$REMOTE_HOST:$PROJECT_DIR/"
+                        sshpass -e scp $SSH_OPTS Jenkinsfile "$SSH_USER@$REMOTE_HOST:$PROJECT_DIR/" || true
+
+                        echo "Scripts copied to remote host"
+                    '''
+                }
+            }
+        }
+
+        stage('Check Remote Tools') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'cloudera-ssh-creds',
+                        usernameVariable: 'SSH_USER',
+                        passwordVariable: 'SSH_PASS'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        export SSHPASS="$SSH_PASS"
+
+                        sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
+                            echo USER_ON_REMOTE=\\$(whoami)
+                            echo PATH=\\$PATH
+
+                            echo Checking Hadoop...
+                            which hdfs || true
+                            hdfs version || true
+
+                            echo Checking Sqoop...
+                            which sqoop || true
+                            sqoop version || true
+
+                            echo Checking Spark...
+                            which spark-submit || true
+                            spark-submit --version || true
+                        "
+                    '''
                 }
             }
         }
@@ -99,7 +181,7 @@ pipeline {
             }
         }
 
-        stage('Run Sqoop Load') {
+        stage('Run Sqoop Load on Remote') {
             when {
                 expression {
                     return params.LOAD_TOOL == 'SQOOP'
@@ -123,30 +205,50 @@ pipeline {
                         def hdfsTargetPath = "${env.HDFS_RAW_BASE}/${table}${targetSuffix}"
 
                         echo "=================================================="
-                        echo "Running Sqoop ${params.LOAD_TYPE} load"
+                        echo "Running Sqoop ${params.LOAD_TYPE} load on remote"
                         echo "Table           : ${table}"
                         echo "HDFS target path: ${hdfsTargetPath}"
                         echo "=================================================="
 
-                        if (params.LOAD_TYPE == 'FULL') {
-                            sh """
-                                chmod +x ${SQOOP_FULL_SCRIPT}
-                                ${SQOOP_FULL_SCRIPT} ${table} ${hdfsTargetPath}
-                            """
-                        }
+                        withCredentials([
+                            usernamePassword(
+                                credentialsId: 'cloudera-ssh-creds',
+                                usernameVariable: 'SSH_USER',
+                                passwordVariable: 'SSH_PASS'
+                            )
+                        ]) {
+                            if (params.LOAD_TYPE == 'FULL') {
+                                sh """
+                                    set +x
+                                    export SSHPASS="\$SSH_PASS"
 
-                        if (params.LOAD_TYPE == 'INCREMENTAL') {
-                            sh """
-                                chmod +x ${SQOOP_INCREMENTAL_SCRIPT}
-                                ${SQOOP_INCREMENTAL_SCRIPT} ${table} ${hdfsTargetPath}
-                            """
+                                    sshpass -e ssh ${SSH_OPTS} "\$SSH_USER@${REMOTE_HOST}" "
+                                        cd ${PROJECT_DIR}
+                                        chmod +x ${SQOOP_FULL_SCRIPT}
+                                        ${SQOOP_FULL_SCRIPT} ${table} ${hdfsTargetPath}
+                                    "
+                                """
+                            }
+
+                            if (params.LOAD_TYPE == 'INCREMENTAL') {
+                                sh """
+                                    set +x
+                                    export SSHPASS="\$SSH_PASS"
+
+                                    sshpass -e ssh ${SSH_OPTS} "\$SSH_USER@${REMOTE_HOST}" "
+                                        cd ${PROJECT_DIR}
+                                        chmod +x ${SQOOP_INCREMENTAL_SCRIPT}
+                                        ${SQOOP_INCREMENTAL_SCRIPT} ${table} ${hdfsTargetPath}
+                                    "
+                                """
+                            }
                         }
                     }
                 }
             }
         }
 
-        stage('Run Spark Full Flow') {
+        stage('Run Spark Full Flow on Remote') {
             when {
                 expression {
                     return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'FULL'
@@ -154,16 +256,27 @@ pipeline {
             }
 
             steps {
-                sh """
-                    echo "Running Spark full gold flow"
-                    echo "Gold destination: ${HDFS_GOLD_BASE}"
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'cloudera-ssh-creds',
+                        usernameVariable: 'SSH_USER',
+                        passwordVariable: 'SSH_PASS'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        export SSHPASS="$SSH_PASS"
 
-                    spark-submit ${SPARK_FULL_SCRIPT}
-                """
+                        sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
+                            cd $PROJECT_DIR
+                            spark-submit $SPARK_FULL_SCRIPT
+                        "
+                    '''
+                }
             }
         }
 
-        stage('Run Spark Incremental Flow') {
+        stage('Run Spark Incremental Flow on Remote') {
             when {
                 expression {
                     return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'INCREMENTAL'
@@ -171,31 +284,51 @@ pipeline {
             }
 
             steps {
-                sh """
-                    echo "Running Spark incremental gold flow"
-                    echo "Gold destination: ${HDFS_GOLD_BASE}"
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'cloudera-ssh-creds',
+                        usernameVariable: 'SSH_USER',
+                        passwordVariable: 'SSH_PASS'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        export SSHPASS="$SSH_PASS"
 
-                    spark-submit ${SPARK_INCREMENTAL_SCRIPT}
-                """
+                        sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
+                            cd $PROJECT_DIR
+                            spark-submit $SPARK_INCREMENTAL_SCRIPT
+                        "
+                    '''
+                }
             }
         }
 
-        stage('Validate HDFS Output') {
+        stage('Validate HDFS Output on Remote') {
             steps {
-                script {
-                    if (params.LOAD_TOOL == 'SQOOP') {
-                        sh """
-                            echo "Validating Sqoop raw output"
-                            hdfs dfs -ls ${HDFS_RAW_BASE} || true
-                        """
-                    }
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'cloudera-ssh-creds',
+                        usernameVariable: 'SSH_USER',
+                        passwordVariable: 'SSH_PASS'
+                    )
+                ]) {
+                    sh '''
+                        set +x
+                        export SSHPASS="$SSH_PASS"
 
-                    if (params.LOAD_TOOL == 'SPARK') {
-                        sh """
-                            echo "Validating Spark gold output"
-                            hdfs dfs -ls ${HDFS_GOLD_BASE} || true
-                        """
-                    }
+                        if [ "$LOAD_TOOL" = "SQOOP" ]; then
+                            sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
+                                hdfs dfs -ls $HDFS_RAW_BASE || true
+                            "
+                        fi
+
+                        if [ "$LOAD_TOOL" = "SPARK" ]; then
+                            sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
+                                hdfs dfs -ls $HDFS_GOLD_BASE || true
+                            "
+                        fi
+                    '''
                 }
             }
         }
