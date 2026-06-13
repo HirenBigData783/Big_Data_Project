@@ -264,26 +264,26 @@ stage('Run Sqoop Load on Remote') {
     }
 }
         stage('Run Spark Full Flow on Remote') {
-            when {
-                expression {
-                    return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'FULL'
-                }
-            }
+    when {
+        expression {
+            return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'FULL'
+        }
+    }
 
-            steps {
-                sh '''
-                    set +x
+    steps {
+        sh '''
+            set +x
 
-                    sshpass -p "${REMOTE_PASSWORD}" ssh \
-                        -o StrictHostKeyChecking=no \
-                        -o UserKnownHostsFile=/dev/null \
-                        ${REMOTE_USER}@${REMOTE_HOST} \
-                        "
-                            cd ${PROJECT_DIR}
-                            spark-submit ${SPARK_FULL_SCRIPT}
-                        "
-                '''
-            }
+            sshpass -p "${REMOTE_PASSWORD}" ssh \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                ${REMOTE_USER}@${REMOTE_HOST} \
+                "
+                    cd ${PROJECT_DIR}
+                    spark-submit --master local[*] ${SPARK_FULL_SCRIPT}
+                "
+        '''
+    }
 }
 
         stage('Run Spark Incremental Flow on Remote') {
