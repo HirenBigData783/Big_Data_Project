@@ -79,6 +79,7 @@ echo "Sqoop query      : ${QUERY}"
 echo "=================================================="
 
 sqoop import \
+  --Dmapreduce.framework.name=local \
   --connect "${JDBC}" \
   --username "${PG_USER}" \
   --password "${PG_PASSWORD}" \
