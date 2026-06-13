@@ -271,82 +271,67 @@ stage('Run Sqoop Load on Remote') {
             }
 
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'cloudera-ssh-creds',
-                        usernameVariable: 'SSH_USER',
-                        passwordVariable: 'SSH_PASS'
-                    )
-                ]) {
-                    sh '''
-                        set +x
-                        export SSHPASS="$SSH_PASS"
+                sh '''
+                    set +x
 
-                        sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
-                            cd $PROJECT_DIR
-                            spark-submit $SPARK_FULL_SCRIPT
+                    sshpass -p "${REMOTE_PASSWORD}" ssh \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        ${REMOTE_USER}@${REMOTE_HOST} \
                         "
-                    '''
-                }
+                            cd ${PROJECT_DIR}
+                            spark-submit ${SPARK_FULL_SCRIPT}
+                        "
+                '''
             }
-        }
+}
 
         stage('Run Spark Incremental Flow on Remote') {
-            when {
-                expression {
-                    return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'INCREMENTAL'
-                }
-            }
-
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'cloudera-ssh-creds',
-                        usernameVariable: 'SSH_USER',
-                        passwordVariable: 'SSH_PASS'
-                    )
-                ]) {
-                    sh '''
-                        set +x
-                        export SSHPASS="$SSH_PASS"
-
-                        sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
-                            cd $PROJECT_DIR
-                            spark-submit $SPARK_INCREMENTAL_SCRIPT
-                        "
-                    '''
-                }
-            }
+    when {
+        expression {
+            return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'INCREMENTAL'
         }
+    }
+
+    steps {
+        sh '''
+            set +x
+
+            sshpass -p "${REMOTE_PASSWORD}" ssh \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                ${REMOTE_USER}@${REMOTE_HOST} \
+                "
+                    cd ${PROJECT_DIR}
+                    spark-submit ${SPARK_INCREMENTAL_SCRIPT}
+                "
+        '''
+    }
+}
 
         stage('Validate HDFS Output on Remote') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'cloudera-ssh-creds',
-                        usernameVariable: 'SSH_USER',
-                        passwordVariable: 'SSH_PASS'
-                    )
-                ]) {
-                    sh '''
-                        set +x
-                        export SSHPASS="$SSH_PASS"
+    steps {
+        sh '''
+            set +x
 
-                        if [ "$LOAD_TOOL" = "SQOOP" ]; then
-                            sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
-                                hdfs dfs -ls $HDFS_RAW_BASE || true
-                            "
-                        fi
+            if [ "$LOAD_TOOL" = "SQOOP" ]; then
+                sshpass -p "${REMOTE_PASSWORD}" ssh \
+                    -o StrictHostKeyChecking=no \
+                    -o UserKnownHostsFile=/dev/null \
+                    ${REMOTE_USER}@${REMOTE_HOST} \
+                    "hdfs dfs -ls ${HDFS_RAW_BASE} || true"
+            fi
 
-                        if [ "$LOAD_TOOL" = "SPARK" ]; then
-                            sshpass -e ssh $SSH_OPTS "$SSH_USER@$REMOTE_HOST" "
-                                hdfs dfs -ls $HDFS_GOLD_BASE || true
-                            "
-                        fi
-                    '''
-                }
-            }
-        }
+            if [ "$LOAD_TOOL" = "SPARK" ]; then
+                sshpass -p "${REMOTE_PASSWORD}" ssh \
+                    -o StrictHostKeyChecking=no \
+                    -o UserKnownHostsFile=/dev/null \
+                    ${REMOTE_USER}@${REMOTE_HOST} \
+                    "hdfs dfs -ls ${HDFS_GOLD_BASE} || true"
+            fi
+        '''
+    }
+}
     }
 
     post {
