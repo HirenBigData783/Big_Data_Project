@@ -215,18 +215,39 @@ save_gold_table(interchange_stations, "gold_interchange_stations")
 # ANALYSIS 6: Quarterly Trend
 # ============================================================
 
-print("\n" + "=" * 60)
+print("=" * 60)
 print("ANALYSIS 6: Passengers by Year and Quarter")
 print("=" * 60)
 
-quarterly_trend = fact_pax \
-    .join(dim_date, "date_id") \
-    .groupBy(col("year").cast(IntegerType()), col("quarter").cast(IntegerType())) \
-    .agg(_sum("total_entry_exit").alias("total_passengers")) \
-    .orderBy("year", "quarter")
+passengers_by_year_quarter = fact_pax.join(
+    dim_date,
+    fact_pax.date_id == dim_date.date_id,
+    "inner"
+).select(
+    fact_pax.total_entry_exit,
+    dim_date.year,
+    dim_date.quarter
+).withColumn(
+    "year", col("year").cast("int")
+).withColumn(
+    "quarter", col("quarter").cast("int")
+).withColumn(
+    "total_entry_exit", col("total_entry_exit").cast("long")
+).groupBy(
+    "year",
+    "quarter"
+).agg(
+    _sum("total_entry_exit").alias("total_passengers")
+).orderBy(
+    "year",
+    "quarter"
+)
 
-quarterly_trend.show(truncate=False)
-save_gold_table(quarterly_trend, "gold_quarterly_trend")
+passengers_by_year_quarter.show()
+
+passengers_by_year_quarter.write.mode("overwrite").parquet(
+    f"{OUTPUT_BASE}/gold_passengers_by_year_quarter"
+)
 
 # ============================================================
 # ANALYSIS 7: Night Tube Analysis
