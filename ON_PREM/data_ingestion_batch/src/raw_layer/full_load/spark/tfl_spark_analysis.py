@@ -86,30 +86,30 @@ print("Source tables created successfully")
 print("\nLoading tables from HDFS...")
 
 dim_date = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/dim_date") \
+    .csv(f"{HDFS_BASE}/dim_date_full_load") \
     .toDF("date_id","year","quarter","month","is_annual","period_label","period_start","period_end","created_at")
 
 dim_lines = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/dim_lines") \
+    .csv(f"{HDFS_BASE}/dim_lines_full_load") \
     .toDF("line_id","line_name","line_color","is_night_service","created_at","updated_at")
 
 dim_networks = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/dim_networks") \
+    .csv(f"{HDFS_BASE}/dim_networks_full_load") \
     .toDF("network_id","network_name","network_type","created_at","updated_at")
 
 dim_stations = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/dim_stations") \
+    .csv(f"{HDFS_BASE}/dim_stations_full_load") \
     .toDF("station_id","nlc_code","station_name","network_id",
           "has_london_underground","has_elizabeth_line","has_overground",
           "has_dlr","has_night_tube","is_active","created_at","updated_at")
 
 fact_pax = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/fact_passenger_entry_exit") \
+    .csv(f"{HDFS_BASE}/fact_passenger_entry_exit_full_load") \
     .toDF("entry_exit_id","station_id","date_id","total_entry_exit",
           "estimated_entries","estimated_exits","record_type","data_source","created_at")
 
 fact_lines = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/fact_station_lines") \
+    .csv(f"{HDFS_BASE}/fact_station_lines_full_load") \
     .toDF("station_line_id","station_id","line_id","is_interchange",
           "effective_from","effective_to","created_at")
 
