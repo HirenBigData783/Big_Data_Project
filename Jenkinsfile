@@ -303,7 +303,7 @@ stage('Run Sqoop Load on Remote') {
                 ${REMOTE_USER}@${REMOTE_HOST} \
                 "
                     cd ${PROJECT_DIR}
-                    spark-submit ${SPARK_INCREMENTAL_SCRIPT}
+                    spark-submit --master "local[*]" ${SPARK_INCREMENTAL_SCRIPT}
                 "
         '''
     }
