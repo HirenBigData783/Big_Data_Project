@@ -15,7 +15,7 @@ spark.sparkContext.setLogLevel("WARN")
 
 
 HDFS_BASE = "/tmp/tfl_project_hadoop"
-OUTPUT_BASE = "/tmp/tfl_project_hadoop_jen/gold"
+OUTPUT_BASE = "/tmp/tfl_project_hadoop/gold"
 HIVE_DB = "tfl_db"
 
 CHECK_COLUMN = "entry_exit_id"
@@ -98,11 +98,7 @@ def read_last_value(watermark_path, watermark_name="watermark"):
     try:
         return int(value.strip())
     except ValueError:
-<<<<<<< Updated upstream
-        raise ValueError(f"Invalid watermark value found: {value}")
-=======
         raise ValueError(f"{watermark_name}: invalid watermark value found: {value}")
->>>>>>> Stashed changes
 
 
 def write_last_value(watermark_path, value):
@@ -224,55 +220,73 @@ def merge_sum_gold(delta_df, table_name, group_cols, sum_cols):
 # APPEND DIMENSION DATA INTO EXISTING HIVE CURATED TABLES
 # ============================================================
 
-def overwrite_dim_stations_curated(dim_stations_df, dim_networks_df):
+def append_dim_lines_curated(dim_lines_df):
     """
-    Overwrites the existing Hive table:
-      tfl_db.dim_stations_curated
+    Appends only new dim_lines rows into the existing Hive table:
+      tfl_db.dim_lines_curated
 
-    Source-to-target mapping:
-      nlc_code   -> station_code
-      is_active  -> active_status
-      network_id -> joins dim_networks to bring network_name
+    Watermark column:
+      line_id
     """
+    target_table = f"{HIVE_DB}.dim_lines_curated"
+    watermark_column = "line_id"
 
-    target_table = f"{HIVE_DB}.dim_stations_curated"
-
-    networks_for_join = dim_networks_df.select(
-        col("network_id").cast("int").alias("network_id"),
-        col("network_name").cast("string").alias("network_name")
+    last_value = read_dimension_last_value(
+        DIM_LINES_WATERMARK_PATH,
+        "dim_lines_curated",
+        target_table,
+        watermark_column
     )
 
-    curated_df = (
-        dim_stations_df
-        .join(networks_for_join, "network_id", "left")
-        .select(
-            col("station_id").cast("int").alias("station_id"),
-            col("nlc_code").cast("string").alias("station_code"),
-            col("station_name").cast("string").alias("station_name"),
-            col("network_id").cast("int").alias("network_id"),
-            col("network_name").cast("string").alias("network_name"),
-            col("has_london_underground").cast("string").alias("has_london_underground"),
-            col("has_elizabeth_line").cast("string").alias("has_elizabeth_line"),
-            col("has_overground").cast("string").alias("has_overground"),
-            col("has_dlr").cast("string").alias("has_dlr"),
-            col("has_night_tube").cast("string").alias("has_night_tube"),
-            when(
-                lower(col("is_active").cast("string")).isin("true", "1", "yes", "y", "active"),
-                lit("Active")
-            ).otherwise(lit("Inactive")).alias("active_status"),
-            current_timestamp().alias("load_timestamp")
-        )
+    source_df = dim_lines_df.withColumn(
+        watermark_column,
+        col(watermark_column).cast("int")
     )
 
-    row_count = curated_df.count()
+    delta_df = source_df.filter(col(watermark_column) > lit(last_value))
+
+    new_last_value_row = delta_df.agg(
+        _max(watermark_column).alias("new_last_value")
+    ).first()
+
+    new_last_value = new_last_value_row["new_last_value"]
+
+    if new_last_value is None:
+        print(f"{target_table}: no new rows to append.")
+        # If the watermark file does not exist yet, create it from the existing target max.
+        if not path_exists(DIM_LINES_WATERMARK_PATH):
+            write_last_value(DIM_LINES_WATERMARK_PATH, last_value)
+        return last_value, last_value, 0
+
+    curated_df = delta_df.select(
+        col("line_id").cast("int").alias("line_id"),
+        col("line_name").cast("string").alias("line_name"),
+        col("line_color").cast("string").alias("line_color"),
+        col("is_night_service").cast("boolean").alias("is_night_service"),
+        col("created_at").cast("timestamp").alias("created_at"),
+        col("updated_at").cast("timestamp").alias("updated_at")
+    )
+
+    rows_to_append = curated_df.count()
+
+    print("=" * 60)
+    print("APPEND: dim_lines_curated")
+    print(f"Target table        = {target_table}")
+    print(f"Watermark column    = {watermark_column}")
+    print(f"OLD_LAST_VALUE      = {last_value}")
+    print(f"NEW_LAST_VALUE      = {new_last_value}")
+    print(f"ROWS TO APPEND      = {rows_to_append}")
+    print("=" * 60)
 
     curated_df.write \
-        .mode("overwrite") \
+        .mode("append") \
         .insertInto(target_table)
 
-    print(f"{target_table}: overwrite completed. Rows written: {row_count}")
+    write_last_value(DIM_LINES_WATERMARK_PATH, new_last_value)
 
-    return row_count
+    print(f"Append completed: {target_table}")
+
+    return last_value, int(new_last_value), rows_to_append
 
 
 def append_dim_stations_curated(dim_stations_df, dim_networks_df):
@@ -374,7 +388,7 @@ def append_dim_stations_curated(dim_stations_df, dim_networks_df):
 print("\nLoading tables from HDFS...")
 
 dim_date = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/dim_date") \
+    .csv(f"{HDFS_BASE}/dim_date_full_load") \
     .toDF(
         "date_id",
         "year",
@@ -388,7 +402,7 @@ dim_date = spark.read.option("header", "false").option("inferSchema", "true") \
     )
 
 dim_lines = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/dim_lines") \
+    .csv(f"{HDFS_BASE}/dim_lines_full_load") \
     .toDF(
         "line_id",
         "line_name",
@@ -399,7 +413,7 @@ dim_lines = spark.read.option("header", "false").option("inferSchema", "true") \
     )
 
 dim_networks = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/dim_networks") \
+    .csv(f"{HDFS_BASE}/dim_networks_full_load") \
     .toDF(
         "network_id",
         "network_name",
@@ -409,7 +423,7 @@ dim_networks = spark.read.option("header", "false").option("inferSchema", "true"
     )
 
 dim_stations = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/dim_stations") \
+    .csv(f"{HDFS_BASE}/dim_stations_full_load") \
     .toDF(
         "station_id",
         "nlc_code",
@@ -426,7 +440,7 @@ dim_stations = spark.read.option("header", "false").option("inferSchema", "true"
     )
 
 fact_pax = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/fact_passenger_entry_exit") \
+    .csv(f"{HDFS_BASE}/fact_passenger_entry_exit_full_load") \
     .toDF(
         "entry_exit_id",
         "station_id",
@@ -440,7 +454,7 @@ fact_pax = spark.read.option("header", "false").option("inferSchema", "true") \
     )
 
 fact_lines = spark.read.option("header", "false").option("inferSchema", "true") \
-    .csv(f"{HDFS_BASE}/fact_station_lines") \
+    .csv(f"{HDFS_BASE}/fact_station_lines_full_load") \
     .toDF(
         "station_line_id",
         "station_id",
