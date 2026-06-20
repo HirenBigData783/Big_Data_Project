@@ -254,8 +254,8 @@ stage('Run Sqoop Load on Remote') {
 
                         sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
                             cd \${PROJECT_DIR}
-                            chmod +x \${SQOOP_INCREMENTAL_SCRIPT}
-                            \${SQOOP_INCREMENTAL_SCRIPT} ${table} ${hdfsTargetPath}
+                            chmod +x ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/raw_incremental_load.sh
+                            ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/raw_incremental_load.sh
                         "
                     """
                 }
