@@ -253,7 +253,7 @@ stage('Run Sqoop Load on Remote') {
                         set +x
 
                         sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
-                            cd \${PROJECT_DIR}
+                            cd \
                             chmod +x \${SQOOP_INCREMENTAL_SCRIPT}
                             \${SQOOP_INCREMENTAL_SCRIPT} ${table} ${hdfsTargetPath}
                         "
