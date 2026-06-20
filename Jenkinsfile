@@ -39,7 +39,7 @@ pipeline {
     SSH_OPTS = '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
     SQOOP_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/raw_sqoop_full_load.sh'
-    SQOOP_INCREMENTAL_SCRIPT = 'ON_PREM/sqoop-import.sh'
+    SQOOP_INCREMENTAL_SCRIPT = 'ON_PREM/data_ingestion_batch'
 
     SPARK_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark/tfl_spark_analysis.py'
     SPARK_INCREMENTAL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark/incremental.py'
