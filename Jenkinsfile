@@ -17,7 +17,7 @@ pipeline {
         choice(
             name: 'LOAD_SCOPE',
             choices: ['ALL', 'DIMENSIONS_ONLY', 'FACT_ONLY', 'SINGLE_TABLE'],
-            description: 'Used mainly for Sqoop table loading'
+            description: 'Used mainly for Sqoop full table loading'
         )
 
         string(
@@ -28,22 +28,25 @@ pipeline {
     }
 
     environment {
-    REMOTE_HOST = '13.41.167.97'
-    REMOTE_USER = 'consultant'
-    REMOTE_PASSWORD = 'Cl0ud3ra@2026#Secur3!'
+        REMOTE_HOST = '13.41.167.97'
+        REMOTE_USER = 'consultant'
+        REMOTE_PASSWORD = 'Cl0ud3ra@2026#Secur3!'
 
-    PROJECT_DIR = '/home/consultant/hiren/TFL_Project_1'
-    HDFS_RAW_BASE = '/tmp/tfl_project_hadoop'
-    HDFS_GOLD_BASE = '/tmp/tfl_project_hadoop/gold'
+        PROJECT_DIR = '/home/consultant/hiren/TFL_Project_1'
+        HDFS_RAW_BASE = '/tmp/tfl_project_hadoop'
+        HDFS_GOLD_BASE = '/tmp/tfl_project_hadoop/gold'
 
-    SSH_OPTS = '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+        SSH_OPTS = '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
-    SQOOP_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/raw_sqoop_full_load.sh'
-    SQOOP_INCREMENTAL_SCRIPT = 'sqoop-import.sh'
+        SQOOP_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/raw_sqoop_full_load.sh'
 
-    SPARK_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark/tfl_spark_analysis.py'
-    SPARK_INCREMENTAL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark/incremental.py'
-}
+        // Root-level script from the repo.
+        // This file must be copied separately because it is not inside ON_PREM.
+        SQOOP_INCREMENTAL_SCRIPT = 'sqoop-import.sh'
+
+        SPARK_FULL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark/tfl_spark_analysis.py'
+        SPARK_INCREMENTAL_SCRIPT = 'ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark/incremental.py'
+    }
 
     stages {
 
@@ -62,11 +65,17 @@ pipeline {
                     echo "PROJECT_DIR    = ${env.PROJECT_DIR}"
                     echo "HDFS_RAW_BASE  = ${env.HDFS_RAW_BASE}"
                     echo "HDFS_GOLD_BASE = ${env.HDFS_GOLD_BASE}"
+
+                    if (params.LOAD_TOOL == 'SQOOP' && params.LOAD_TYPE == 'INCREMENTAL') {
+                        echo "NOTE: Sqoop incremental uses ${env.SQOOP_INCREMENTAL_SCRIPT}."
+                        echo "NOTE: This script contains its own table loop, so Jenkins will run it once."
+                    }
                 }
             }
         }
+
         stage('Test SSH Login') {
-                    steps {
+            steps {
                 echo '========================================='
                 echo 'Testing SSH Login to Cloudera'
                 echo '========================================='
@@ -86,56 +95,71 @@ pipeline {
                 '''
             }
         }
+
         stage('Prepare Remote Directory') {
             steps {
-        echo '========================================='
-        echo 'Stage 2: Create Directories on Cloudera'
-        echo '========================================='
+                echo '========================================='
+                echo 'Stage 2: Create Directories on Cloudera'
+                echo '========================================='
 
-        sh '''
-            set +x
+                sh '''
+                    set +x
 
-            sshpass -p "${REMOTE_PASSWORD}" ssh \
-                -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                ${REMOTE_USER}@${REMOTE_HOST} \
-                "mkdir -p ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/full_load \
-                          ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark \
-                          ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load \
-                          ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark \
-                 && echo REMOTE_DIR_READY"
-        '''
+                    sshpass -p "${REMOTE_PASSWORD}" ssh \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        ${REMOTE_USER}@${REMOTE_HOST} \
+                        "mkdir -p ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/full_load \
+                                  ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/full_load/spark \
+                                  ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load \
+                                  ${PROJECT_DIR}/ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/spark \
+                         && echo REMOTE_DIR_READY"
+                '''
+            }
         }
-}
 
         stage('Copy Scripts to Remote') {
             steps {
-                    echo '========================================='
-                    echo 'Stage 3: Copy Scripts to Cloudera'
-                    echo '========================================='
+                echo '========================================='
+                echo 'Stage 3: Copy Scripts to Cloudera'
+                echo '========================================='
 
-                    sh '''
-                        set +x
+                sh '''
+                    set +x
 
-                        echo "Copying ON_PREM folder to remote host..."
+                    echo "Copying ON_PREM folder to remote host..."
 
-                        sshpass -p "${REMOTE_PASSWORD}" scp \
-                            -o StrictHostKeyChecking=no \
-                            -o UserKnownHostsFile=/dev/null \
-                            -r ON_PREM \
-                            ${REMOTE_USER}@${REMOTE_HOST}:${PROJECT_DIR}/
+                    sshpass -p "${REMOTE_PASSWORD}" scp \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        -r ON_PREM \
+                        ${REMOTE_USER}@${REMOTE_HOST}:${PROJECT_DIR}/
 
-                        echo "Copying Jenkinsfile to remote host..."
+                    echo "Copying Jenkinsfile to remote host..."
 
-                        sshpass -p "${REMOTE_PASSWORD}" scp \
-                            -o StrictHostKeyChecking=no \
-                            -o UserKnownHostsFile=/dev/null \
-                            Jenkinsfile \
-                            ${REMOTE_USER}@${REMOTE_HOST}:${PROJECT_DIR}/ || true
+                    sshpass -p "${REMOTE_PASSWORD}" scp \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        Jenkinsfile \
+                        ${REMOTE_USER}@${REMOTE_HOST}:${PROJECT_DIR}/ || true
 
-                        echo "Scripts copied to remote host"
-                    '''
-        }
+                    echo "Copying root-level Sqoop incremental script to remote host..."
+
+                    if [ ! -f "${SQOOP_INCREMENTAL_SCRIPT}" ]; then
+                        echo "ERROR: ${SQOOP_INCREMENTAL_SCRIPT} not found in Jenkins workspace."
+                        echo "Make sure sqoop-import.sh exists in the same repo branch as Jenkinsfile."
+                        exit 1
+                    fi
+
+                    sshpass -p "${REMOTE_PASSWORD}" scp \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        "${SQOOP_INCREMENTAL_SCRIPT}" \
+                        ${REMOTE_USER}@${REMOTE_HOST}:${PROJECT_DIR}/
+
+                    echo "Scripts copied to remote host"
+                '''
+            }
         }
 
         stage('Check Remote Tools') {
@@ -167,10 +191,17 @@ pipeline {
                             echo Checking Spark...
                             which spark-submit || true
                             spark-submit --version || true
+
+                            echo Checking copied scripts...
+                            cd ${PROJECT_DIR}
+                            ls -l Jenkinsfile || true
+                            ls -l ${SQOOP_INCREMENTAL_SCRIPT} || true
+                            ls -l ${SQOOP_FULL_SCRIPT} || true
                         "
                 '''
             }
-}
+        }
+
         stage('Select Sqoop Tables') {
             when {
                 expression {
@@ -207,131 +238,134 @@ pipeline {
             }
         }
 
-stage('Run Sqoop Load on Remote') {
-    when {
-        expression {
-            return params.LOAD_TOOL == 'SQOOP'
-        }
-    }
-
-    steps {
-        script {
-            def tables = env.TABLE_LIST.split(',')
-
-            for (table in tables) {
-                table = table.trim()
-
-                def targetSuffix = ''
-                if (params.LOAD_TYPE == 'FULL') {
-                    targetSuffix = '_full_load'
-                } else {
-                    targetSuffix = '_inc_load'
+        stage('Run Sqoop Load on Remote') {
+            when {
+                expression {
+                    return params.LOAD_TOOL == 'SQOOP'
                 }
+            }
 
-                def hdfsTargetPath = "${env.HDFS_RAW_BASE}/${table}${targetSuffix}"
+            steps {
+                script {
 
-                echo "=================================================="
-                echo "Running Sqoop ${params.LOAD_TYPE} load on remote"
-                echo "Table           : ${table}"
-                echo "HDFS target path: ${hdfsTargetPath}"
-                echo "=================================================="
+                    if (params.LOAD_TYPE == 'INCREMENTAL') {
+                        echo "=================================================="
+                        echo "Running Sqoop INCREMENTAL load on remote"
+                        echo "Script          : ${env.SQOOP_INCREMENTAL_SCRIPT}"
+                        echo "Note            : script runs its own table loop"
+                        echo "=================================================="
 
-                if (params.LOAD_TYPE == 'FULL') {
-                    sh """
-                        set +x
+                        sh """
+                            set +x
 
-                        sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
-                            cd \${PROJECT_DIR}
-                            chmod +x \${SQOOP_FULL_SCRIPT}
-                            \${SQOOP_FULL_SCRIPT} ${table} ${hdfsTargetPath}
-                        "
-                    """
-                }
+                            sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
+                                cd \${PROJECT_DIR}
+                                echo CURRENT_DIR=\\\$(pwd)
+                                echo Checking incremental script...
+                                ls -l \${SQOOP_INCREMENTAL_SCRIPT}
+                                chmod +x \${SQOOP_INCREMENTAL_SCRIPT}
+                                ./\${SQOOP_INCREMENTAL_SCRIPT}
+                            "
+                        """
+                    }
 
-                if (params.LOAD_TYPE == 'INCREMENTAL') {
-                    sh """
-                        set +x
+                    if (params.LOAD_TYPE == 'FULL') {
+                        def tables = env.TABLE_LIST.split(',')
 
-                        sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
-                            cd \${PROJECT_DIR}
-                            chmod +x ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/raw_incremental_load.sh
-                            ON_PREM/data_ingestion_batch/src/raw_layer/incremental_load/raw_incremental_load.sh
-                        "
-                    """
+                        for (table in tables) {
+                            table = table.trim()
+                            def hdfsTargetPath = "${env.HDFS_RAW_BASE}/${table}_full_load"
+
+                            echo "=================================================="
+                            echo "Running Sqoop FULL load on remote"
+                            echo "Table           : ${table}"
+                            echo "HDFS target path: ${hdfsTargetPath}"
+                            echo "=================================================="
+
+                            sh """
+                                set +x
+
+                                sshpass -p "\${REMOTE_PASSWORD}" ssh \${SSH_OPTS} \${REMOTE_USER}@\${REMOTE_HOST} "
+                                    cd \${PROJECT_DIR}
+                                    chmod +x \${SQOOP_FULL_SCRIPT}
+                                    \${SQOOP_FULL_SCRIPT} ${table} ${hdfsTargetPath}
+                                "
+                            """
+                        }
+                    }
                 }
             }
         }
-    }
-}
+
         stage('Run Spark Full Flow on Remote') {
-    when {
-        expression {
-            return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'FULL'
+            when {
+                expression {
+                    return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'FULL'
+                }
+            }
+
+            steps {
+                sh '''
+                    set +x
+
+                    sshpass -p "${REMOTE_PASSWORD}" ssh \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        ${REMOTE_USER}@${REMOTE_HOST} \
+                        "
+                            cd ${PROJECT_DIR}
+                            spark-submit --master local[*] ${SPARK_FULL_SCRIPT}
+                        "
+                '''
+            }
         }
-    }
-
-    steps {
-        sh '''
-            set +x
-
-            sshpass -p "${REMOTE_PASSWORD}" ssh \
-                -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                ${REMOTE_USER}@${REMOTE_HOST} \
-                "
-                    cd ${PROJECT_DIR}
-                    spark-submit --master local[*] ${SPARK_FULL_SCRIPT}
-                "
-        '''
-    }
-}
 
         stage('Run Spark Incremental Flow on Remote') {
-    when {
-        expression {
-            return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'INCREMENTAL'
+            when {
+                expression {
+                    return params.LOAD_TOOL == 'SPARK' && params.LOAD_TYPE == 'INCREMENTAL'
+                }
+            }
+
+            steps {
+                sh '''
+                    set +x
+
+                    sshpass -p "${REMOTE_PASSWORD}" ssh \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        ${REMOTE_USER}@${REMOTE_HOST} \
+                        "
+                            cd ${PROJECT_DIR}
+                            spark-submit --master "local[*]" ${SPARK_INCREMENTAL_SCRIPT}
+                        "
+                '''
+            }
         }
-    }
-
-    steps {
-        sh '''
-            set +x
-
-            sshpass -p "${REMOTE_PASSWORD}" ssh \
-                -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                ${REMOTE_USER}@${REMOTE_HOST} \
-                "
-                    cd ${PROJECT_DIR}
-                    spark-submit --master "local[*]" ${SPARK_INCREMENTAL_SCRIPT}
-                "
-        '''
-    }
-}
 
         stage('Validate HDFS Output on Remote') {
-    steps {
-        sh '''
-            set +x
+            steps {
+                sh '''
+                    set +x
 
-            if [ "$LOAD_TOOL" = "SQOOP" ]; then
-                sshpass -p "${REMOTE_PASSWORD}" ssh \
-                    -o StrictHostKeyChecking=no \
-                    -o UserKnownHostsFile=/dev/null \
-                    ${REMOTE_USER}@${REMOTE_HOST} \
-                    "hdfs dfs -ls ${HDFS_RAW_BASE} || true"
-            fi
+                    if [ "$LOAD_TOOL" = "SQOOP" ]; then
+                        sshpass -p "${REMOTE_PASSWORD}" ssh \
+                            -o StrictHostKeyChecking=no \
+                            -o UserKnownHostsFile=/dev/null \
+                            ${REMOTE_USER}@${REMOTE_HOST} \
+                            "hdfs dfs -ls ${HDFS_RAW_BASE} || true"
+                    fi
 
-            if [ "$LOAD_TOOL" = "SPARK" ]; then
-                sshpass -p "${REMOTE_PASSWORD}" ssh \
-                    -o StrictHostKeyChecking=no \
-                    -o UserKnownHostsFile=/dev/null \
-                    ${REMOTE_USER}@${REMOTE_HOST} \
-                    "hdfs dfs -ls ${HDFS_GOLD_BASE} || true"
-            fi
-        '''
-    }
-}
+                    if [ "$LOAD_TOOL" = "SPARK" ]; then
+                        sshpass -p "${REMOTE_PASSWORD}" ssh \
+                            -o StrictHostKeyChecking=no \
+                            -o UserKnownHostsFile=/dev/null \
+                            ${REMOTE_USER}@${REMOTE_HOST} \
+                            "hdfs dfs -ls ${HDFS_GOLD_BASE} || true"
+                    fi
+                '''
+            }
+        }
     }
 
     post {
