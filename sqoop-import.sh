@@ -103,7 +103,7 @@ for ENTRY in "${TABLES[@]}"; do
         --password $PG_PASSWORD \
         --query "SELECT * FROM ${PG_SCHEMA}.${INC_LOAD_TABLE} WHERE \$CONDITIONS AND ${CHECK_COL} > ${LAST_VAL}" \
         --split-by $CHECK_COL \
-        --target-dir $HDFS_BASE/${REAL_TABLE}_inc_load \
+        --target-dir $HDFS_BASE/${REAL_TABLE}_full_load \
         --append \
         -m 1
 
@@ -121,7 +121,7 @@ for ENTRY in "${TABLES[@]}"; do
 
         echo "✓ SUCCESS: $REAL_TABLE"
 
-        hdfs dfs -ls $HDFS_BASE/$REAL_TABLE
+        hdfs dfs -ls $HDFS_BASE/$REAL_TABLE_full_load
 
         #hive -e "MSCK REPAIR TABLE $HIVE_DB.$REAL_TABLE;"
         beeline -u "jdbc:hive2://ip-172-31-12-74.eu-west-2.compute.internal:10000/default" \
