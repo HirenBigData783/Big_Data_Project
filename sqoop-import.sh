@@ -121,7 +121,7 @@ for ENTRY in "${TABLES[@]}"; do
 
         echo "✓ SUCCESS: $REAL_TABLE"
 
-        hdfs dfs -ls $HDFS_BASE/$REAL_TABLE_full_load
+        hdfs dfs -ls $HDFS_BASE/${REAL_TABLE}_full_load
 
         #hive -e "MSCK REPAIR TABLE $HIVE_DB.$REAL_TABLE;"
         beeline -u "jdbc:hive2://ip-172-31-12-74.eu-west-2.compute.internal:10000/default" \
