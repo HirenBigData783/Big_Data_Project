@@ -259,12 +259,14 @@ def append_dim_lines_curated(dim_lines_df):
         return last_value, last_value, 0
 
     curated_df = delta_df.select(
-        col("line_id").cast("int").alias("line_id"),
-        col("line_name").cast("string").alias("line_name"),
-        col("line_color").cast("string").alias("line_color"),
-        col("is_night_service").cast("boolean").alias("is_night_service"),
-        col("created_at").cast("timestamp").alias("created_at"),
-        col("updated_at").cast("timestamp").alias("updated_at")
+    col("line_id").cast("int").alias("line_id"),
+    col("line_name").cast("string").alias("line_name"),
+    col("line_color").cast("string").alias("line_color"),
+    when(
+        lower(col("is_night_service").cast("string")).isin("true", "1", "yes", "y"),
+        lit("Y")
+    ).otherwise(lit("N")).alias("night_service_flag"),
+    current_timestamp().alias("load_timestamp")
     )
 
     rows_to_append = curated_df.count()
