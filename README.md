@@ -1,5 +1,5 @@
 # Big_Data_Project
-## Project Overview — what the pipeline does and why it exists
+### Project Overview — what the pipeline does and why it exists
 Architecture — ASCII diagrams for the batch, streaming, and CI/CD layers
 Tech Stack — clean table covering every tool from PostgreSQL to Hive
 Repository Structure — folder layout with file-level descriptions
