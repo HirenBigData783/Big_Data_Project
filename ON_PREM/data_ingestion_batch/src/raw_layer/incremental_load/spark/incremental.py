@@ -265,7 +265,10 @@ def append_dim_lines_curated(dim_lines_df):
         col("line_id").cast("int").alias("line_id"),
         col("line_name").cast("string").alias("line_name"),
         col("line_color").cast("string").alias("line_color"),
-        col("is_night_service").cast("string").alias("night_service_flag"),
+        when(
+            lower(col("is_night_service").cast("string")).isin("true", "1", "yes", "y"),
+            lit("Y")
+        ).otherwise(lit("N")).alias("night_service_flag")
         current_timestamp().alias("load_timestamp")
     )
 
