@@ -1,4 +1,4 @@
-# Big_Data_Project
+# TFL - Big Data Project
 * Project Overview — what the pipeline does and why it exists
 * Architecture — ASCII diagrams for the batch, streaming, and CI/CD layers
 * Tech Stack — clean table covering every tool from PostgreSQL to Hive
